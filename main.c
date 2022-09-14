@@ -7,10 +7,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-extern char *strdup(const char *s);
-
-#define USE_CUSTOM_ALLOC
-
 #define CHUNK_SIZE 4096
 
 typedef struct node_chunk {
@@ -43,20 +39,10 @@ node_chunk_t* new_node_chunk(void) {
 JsonNode_t* alloc_custom(void* const alloc_data);
 
 void dealloc_custom(void* const alloc_data, JsonNode_t* node) {
-    //printf("dealloc called\n");
-    //fflush(stdout);
-
     if(node == NULL)
         return;
 
     dealloc_count++;
-    //printf("dealloc count : %lu\n", dealloc_count);
-}
-
-size_t timestamp(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000ul + tv.tv_usec;
 }
 
 int main(int argc, char** argv) {
@@ -113,34 +99,54 @@ int main(int argc, char** argv) {
         json
     );
 
-    JsonObjIter_t iter;
-    if(!JsonObjIter_init(&iter, doc.first)) {
-        printf("top-level entity is not a JSON object\n");
+    if(doc.first->type != JsonNodeType_array) {
+        printf("top-level entry is not an array type\n");
         exit(1);
     }
 
-    JsonNode_t* node = JsonObj_field_by_name(json, doc.first, "dataStoreUrl");
-    if(node == NULL) {
-        printf("field name 'dataStoreUrl' not found in JSON document\n");
+    JsonArrIter_t arr;
+    if(!JsonArrIter_init(&arr, doc.first)) {
+        printf("error initializing array iterator\n");
         exit(1);
     }
 
-    JsonNode_t* value = node->pair.value;
-    if(value->type != JsonNodeType_string) {
-        printf("value is not string type\n");
-        exit(1);
+    printf("for every entry in top-level array, print payload/commits[0]/message if it exists\n\n");
+
+    JsonNode_t* entry = JsonArrIter_current(&arr);
+    for(; entry != NULL; JsonArrIter_next(&arr), entry = JsonArrIter_current(&arr)) {
+
+        // print every payload/commits[0]/message
+
+        JsonNode_t* p = JsonObj_field_by_name(json, entry, "payload");
+        if(p == NULL) {
+            continue;
+        }
+
+        JsonNode_t* c = JsonObj_field_by_name(json, JsonObj_field_value(p), "commits");
+        if(c == NULL) {
+            continue;
+        }
+
+        JsonNode_t* c0 = JsonArr_index(JsonObj_field_value(c), 0);
+        if(c0 == NULL) {
+            continue;
+        }
+
+        JsonNode_t* m = JsonObj_field_by_name(json, c0, "message");
+        if(m == NULL) {
+            continue;
+        }
+
+        JsonString_t str;
+        JsonString_init(&str, json, JsonObj_field_value(m));
+
+        size_t strsz = JsonString_size(&str);
+        char buf[strsz + 1];
+        buf[strsz] = '\0';
+        JsonString_copy(&str, buf);
+
+        printf("message : %s\n", buf);
     }
-
-    char buf[128];
-
-    JsonString_t str;
-    JsonString_init(&str, json, value);
-    unsigned long strsz = JsonString_size(&str);
-    buf[strsz] = '\0';
-    JsonString_copy(&str, buf);
-
-    printf("value : %s\n", buf);
-    printf("input : jdbc:microsoft:sqlserver://LOCALHOST:1433;DatabaseName=goon\n");
 
     JsonParser_delete_document(&doc);
 

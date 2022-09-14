@@ -22,6 +22,7 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 //
 
 #include "json-parser.h"
+#include <stddef.h>
 
 //
 // search for top-level field name in given JSON object node
@@ -29,6 +30,28 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 // NOTE : this is not the most efficient way to search for a given field
 //
 JsonNode_t* JsonObj_field_by_name(const char* doc_source, JsonNode_t* obj, const char* fieldname);
+
+//
+// search for first field-pair in the given JSON object node
+// returns pointer to first JSON pair if found, else NULL
+//
+JsonNode_t* JsonObj_first_field(JsonNode_t* obj);
+
+//
+// simple access wrapper
+//
+JsonNode_t* JsonObj_field_value(JsonNode_t* pair);
+
+JsonNode_t* JsonArr_index(JsonNode_t* arr, size_t idx);
+
+typedef struct JsonArrIter {
+    JsonNode_t* arr;
+    JsonNode_t* element;
+} JsonArrIter_t;
+
+int JsonArrIter_init(JsonArrIter_t* iter, JsonNode_t* arr);
+int JsonArrIter_next(JsonArrIter_t* iter);
+JsonNode_t* JsonArrIter_current(JsonArrIter_t* iter);
 
 typedef struct JsonObjIter {
     JsonNode_t* obj;

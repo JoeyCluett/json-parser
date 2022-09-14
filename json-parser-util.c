@@ -45,6 +45,29 @@ unsigned long JsonString_size(JsonString_t* str) {
     return (unsigned long)(str->end - str->start);
 }
 
+int JsonArrIter_init(JsonArrIter_t* iter, JsonNode_t* arr) {
+    if(iter == NULL || arr == NULL | arr->type != JsonNodeType_array)
+        return 0;
+
+    iter->arr = arr;
+    iter->element = arr->arr.first;
+    return 1;
+}
+
+int JsonArrIter_next(JsonArrIter_t* iter) {
+    if(iter->element == NULL)
+        return 0;
+
+    iter->element = iter->element->elem.next;
+    return (iter->element == NULL ? 0 : 1);
+}
+
+JsonNode_t* JsonArrIter_current(JsonArrIter_t* iter) {
+    if(iter->element == NULL)
+        return NULL;
+    return iter->element->elem.item;
+}
+
 int JsonObjIter_field_name_matches(JsonObjIter_t* iter, const char* doc_source, const char* fieldname) {
     JsonNode_t* pair = JsonObjIter_current(iter);
 
@@ -71,8 +94,30 @@ JsonNode_t* JsonObj_field_by_name(const char* doc_source, JsonNode_t* obj, const
     return NULL;
 }
 
+JsonNode_t* JsonObj_field_value(JsonNode_t* pair) {
+    return pair->pair.value;
+}
+
+JsonNode_t* JsonArr_index(JsonNode_t* arr, size_t idx) {
+
+    JsonArrIter_t iter;
+    if(!JsonArrIter_init(&iter, arr))
+        return NULL;
+
+    if(JsonArrIter_current(&iter) == NULL)
+        return NULL;
+
+    size_t i = 0ul;
+    for(; i < idx; i++) {
+        if(!JsonArrIter_next(&iter))
+            return NULL;
+    }
+
+    return JsonArrIter_current(&iter);
+}
+
 int JsonObjIter_init(JsonObjIter_t* iter, JsonNode_t* top) {
-    if(top == NULL || top->type != JsonNodeType_object)
+    if(iter == NULL || top == NULL || top->type != JsonNodeType_object)
         return 0;
 
     iter->obj = top;
