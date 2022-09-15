@@ -1,4 +1,5 @@
 /*
+Copyright (C) 2022  Joe Cluett
 This file is part of json-parser.
 
 json-parser is free software: you can redistribute it and/or modify it under 
@@ -144,11 +145,11 @@ size_t JsonString_copy(const JsonString_t* str, char* restrict dest) {
 #endif
         }
 #else
-#ifdef JSONPARSER_FILTER_NONPRINTABLE_ASCII
         if(start[0] == '\\') {
             size_t l = JsonAPI_handle_escape_char(start[1], dest);
             dest += l;
             start += 2;
+#ifdef JSONPARSER_FILTER_NONPRINTABLE_ASCII
         } else if(JsonAPI_printable_chars[*(unsigned char*)start]) {
             dest[0] = start[0];
             dest++;
@@ -157,20 +158,15 @@ size_t JsonString_copy(const JsonString_t* str, char* restrict dest) {
             start++;
         }
 #else
-        if(start[0] == '\\') {
-            size_t l = JsonAPI_handle_escape_char(start[1], dest);
-            dest += l;
-            start += 2;
         } else {
             dest[0] = start[0];
             dest++;
             start++;
         }
+#endif
 
-#endif
-#endif
     }
-
+#endif
     return (size_t)(dest - dest_start);
 }
 

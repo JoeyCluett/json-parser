@@ -1,4 +1,5 @@
 /*
+Copyright (C) 2022  Joe Cluett
 This file is part of json-parser.
 
 json-parser is free software: you can redistribute it and/or modify it under 
