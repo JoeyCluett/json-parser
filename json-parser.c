@@ -12,8 +12,8 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "json-parser.h"
+#include "json-parser-config.h"
 
-#define JSONPARSER_MAX_DEPTH 64
 #ifdef JSONPARSER_HAS_MALLOC
 
 #include <stdio.h>
@@ -356,23 +356,6 @@ static inline const char* JsonParser_is_tfn(const char* str, JsonNodeType_t* nod
     return NULL;
 }
 
-static void JsonParser_debug_print_work_stack(JsonNode_t* top) {
-
-    if(top->parent != NULL) {
-        JsonParser_debug_print_work_stack(top->parent);
-    }
-
-    if(top->type == JsonNodeType_array) {
-        printf("type : array\n");
-    }
-    else if(top->type == JsonNodeType_object) {
-        printf("type : object (key)\n");
-    }
-    else if(top->type == JsonNodeType_pair) {
-        printf("type :  pair (value)\n");
-    }
-}
-
 JsonParseCode_t JsonParser_parse_document(JsonDocument_t* doc, const char* str) {
     const char* const start_str = str;
 
@@ -423,29 +406,6 @@ JsonParseCode_t JsonParser_parse_document(JsonDocument_t* doc, const char* str) 
                 return JsonParseCode_success;
             return JsonParseCode_malformed_source;
         }
-
-/*
-        {
-            JsonParser_debug_print_work_stack(top);
-
-            const char* state_desc[] = { "state_array", "state_array_sep", "state_key", "state_value", "state_pair_sep" };
-
-            int* iter = state_stack;
-            while(iter <= state_pointer) {
-                printf("%s\n", state_desc[*iter]);
-                iter++;
-            }
-
-            const char* citer = (const char*)str;
-            while(citer > start_str && *citer != '\n')
-                citer--;
-            if(*citer == '\n') citer++;
-
-            size_t n = (size_t)(str - citer);
-            fwrite(citer, 1, n, stdout); fflush(stdout);
-            printf("\n");
-        }
-*/
 
         const int state_current = *state_pointer;
         const char c = *str;

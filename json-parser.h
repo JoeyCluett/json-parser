@@ -13,8 +13,7 @@ You should have received a copy of the GNU General Public License along
 with json-parser. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#define JSONPARSER_HAS_MALLOC
-#define JSONPARSER_NOT_STRICT
+#include "json-parser-config.h"
 
 typedef enum {
     JsonNodeType_none,

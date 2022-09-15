@@ -22,7 +22,15 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 //
 
 #include "json-parser.h"
+#include "json-parser-config.h"
+
 #include <stddef.h>
+
+typedef struct JsonString {
+    const char* doc_source;
+    unsigned int start;
+    unsigned int end;
+} JsonString_t;
 
 //
 // search for top-level field name in given JSON object node
@@ -40,7 +48,8 @@ JsonNode_t* JsonObj_first_field(JsonNode_t* obj);
 //
 // simple access wrapper
 //
-JsonNode_t* JsonObj_field_value(JsonNode_t* pair);
+JsonNode_t* JsonPair_field(JsonNode_t* pair);
+int JsonPair_key(JsonNode_t* pair, const char* doc_source, JsonString_t* str);
 
 JsonNode_t* JsonArr_index(JsonNode_t* arr, size_t idx);
 
@@ -81,12 +90,6 @@ JsonNode_t* JsonObjIter_current(JsonObjIter_t* iter);
 //
 int JsonObjIter_field_name_matches(JsonObjIter_t* iter, const char* doc_source, const char* fieldname);
 
-typedef struct JsonString {
-    const char* doc_source;
-    unsigned int start;
-    unsigned int end;
-} JsonString_t;
-
 //
 // initialize JsonString_t to reference the same data as the orginal JsonNode_t::string type
 // returns 1 on success, else 0
@@ -95,10 +98,14 @@ int JsonString_init(JsonString_t* str, const char* doc_source, JsonNode_t* str_n
 
 //
 // return length (in bytes) of given JsonString_t
+// note this function does not consider evaluated escape sequences 
+// or redefined utf-8 sequences. it represents an upper limit on the 
+// size of the given string
 //
 unsigned long JsonString_size(JsonString_t* str);
 
 //
 // copy the contents of the string out of the original source
+// returns the actual (byte) size of the copied out string
 //
-void JsonString_copy(const JsonString_t* str, char* restrict dest);
+size_t JsonString_copy(const JsonString_t* str, char* restrict dest);

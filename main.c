@@ -122,12 +122,12 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        JsonNode_t* c = JsonObj_field_by_name(json, JsonObj_field_value(p), "commits");
+        JsonNode_t* c = JsonObj_field_by_name(json, JsonPair_field(p), "commits");
         if(c == NULL) {
             continue;
         }
 
-        JsonNode_t* c0 = JsonArr_index(JsonObj_field_value(c), 0);
+        JsonNode_t* c0 = JsonArr_index(JsonPair_field(c), 0);
         if(c0 == NULL) {
             continue;
         }
@@ -138,12 +138,12 @@ int main(int argc, char** argv) {
         }
 
         JsonString_t str;
-        JsonString_init(&str, json, JsonObj_field_value(m));
+        JsonString_init(&str, json, JsonPair_field(m));
 
         size_t strsz = JsonString_size(&str);
         char buf[strsz + 1];
+        strsz = JsonString_copy(&str, buf);
         buf[strsz] = '\0';
-        JsonString_copy(&str, buf);
 
         printf("message : %s\n", buf);
     }

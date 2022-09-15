@@ -5,6 +5,7 @@
 
 main
 *json
+tmp.txt
 
 # User-specific files
 *.rsuser

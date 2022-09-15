@@ -12,6 +12,7 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "json-parser-util.h"
+#include "json-parser-config.h"
 #include "json-parser.h"
 
 #include <stddef.h>
@@ -29,16 +30,148 @@ int JsonString_init(JsonString_t* str, const char* doc_source, JsonNode_t* str_n
     return 1;
 }
 
-void JsonString_copy(const JsonString_t* str, char* restrict dest) {
+//
+// handles escape sequences
+// returns how many chars were written out
+//
+static inline size_t JsonAPI_handle_escape_char(char next_char, char* dest) {
+    switch(next_char) {
+    case 'b':
+#ifdef JSONPARSER_BACKSPACE_ALT
+        dest[0] = JSONPARSER_BACKSPACE_ALT; break;
+#else
+        dest[0] = '\b'; break;
+#endif
+
+    case 'f':
+#ifdef JSONPARSER_FORMFEED_ALT
+    dest[0] = JSONPARSER_FORMFEED_ALT; break;
+#else
+    dest[0] = '\f'; break;
+#endif
+
+    case 'r':
+#ifdef JSONPARSER_CARRIAGERETURN_ALT
+    dest[0] = JSONPARSER_CARRIAGERETURN_ALT; break;    
+#else
+    dest[0] = '\r'; break;
+#endif
+
+    case 't':
+#ifdef JSONPARSER_TAB_ALT
+    dest[0] = JSONPARSER_TAB_ALT; break;
+#else
+    dest[0] = '\t'; break;
+#endif
+
+    case 'n':  dest[0] = '\n'; break;
+    case '"':  dest[0] = '"';  break;
+    case '\\': dest[0] = '\\'; break;
+
+    default:   dest[0] = '~';  return 0; // copy nothing i guess
+    }
+
+    return 1;
+}
+
+#ifdef JSONPARSER_FILTER_NONPRINTABLE_ASCII
+static const char JsonAPI_printable_chars[] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+};
+#endif
+
+size_t JsonString_copy(const JsonString_t* str, char* restrict dest) {
+
+    char* dest_start = dest;
 
     const char* start = str->doc_source + str->start;
     const char* end   = str->doc_source + str->end;
 
-    while(start != end) {
-        dest[0] = start[0];
-        dest++;
-        start++;
+    while(start < end) {
+
+#if defined(JSONPARSER_USE_UTF8) && defined(JSONPARSER_UTF8_ALT)
+        unsigned char c = *(unsigned char*)start;
+        if(c & 0b10000000) {
+            if((c & 0b11100000) == 0b11000000) { // 2-byte UTF-8 char
+                dest[0] = JSONPARSER_UTF8_ALT;
+                start += 2;
+                dest++;
+            } else if((c & 0b11110000) == 0b11100000) { // 3-byte UTF-8 char
+                dest[0] = JSONPARSER_UTF8_ALT;
+                start += 3;
+                dest++;
+            } else if((c & 0b11111000) == 0b11110000) { // 4-byte UTF-8 char
+                dest[0] = JSONPARSER_UTF8_ALT;
+                start += 4;
+                dest++;
+            } else {
+                // malformed UTF-8 char
+                // roll the dice
+                dest[0] = '~';
+                dest++;
+                start++;
+            }
+        } else if(start[0] == '\\') {
+            size_t l = JsonAPI_handle_escape_char(start[1], dest);
+            dest += l;
+            start += 2;
+        } else {
+#ifdef JSONPARSER_FILTER_NONPRINTABLE_ASCII
+            if(JsonAPI_printable_chars[start[0]]) {
+                dest[0] = start[0];
+                dest++;
+            }
+            start++;
+#else
+            dest[0] = start[0];
+            dest++;
+            start++;
+#endif
+        }
+#else
+#ifdef JSONPARSER_FILTER_NONPRINTABLE_ASCII
+        if(start[0] == '\\') {
+            size_t l = JsonAPI_handle_escape_char(start[1], dest);
+            dest += l;
+            start += 2;
+        } else if(JsonAPI_printable_chars[*(unsigned char*)start]) {
+            dest[0] = start[0];
+            dest++;
+            start++;
+        } else {
+            start++;
+        }
+#else
+        if(start[0] == '\\') {
+            size_t l = JsonAPI_handle_escape_char(start[1], dest);
+            dest += l;
+            start += 2;
+        } else {
+            dest[0] = start[0];
+            dest++;
+            start++;
+        }
+
+#endif
+#endif
     }
+
+    return (size_t)(dest - dest_start);
 }
 
 unsigned long JsonString_size(JsonString_t* str) {
@@ -94,8 +227,18 @@ JsonNode_t* JsonObj_field_by_name(const char* doc_source, JsonNode_t* obj, const
     return NULL;
 }
 
-JsonNode_t* JsonObj_field_value(JsonNode_t* pair) {
-    return pair->pair.value;
+JsonNode_t* JsonPair_field(JsonNode_t* pair) {
+    return (pair->type == JsonNodeType_pair ? pair->pair.value : NULL);
+}
+
+int JsonPair_key(JsonNode_t* pair, const char* doc_source, JsonString_t* str) {
+    if(pair->type != JsonNodeType_pair)
+        return 0;
+    
+    str->doc_source = doc_source;
+    str->start = pair->pair.key_start;
+    str->end   = pair->pair.key_end;
+    return 1;
 }
 
 JsonNode_t* JsonArr_index(JsonNode_t* arr, size_t idx) {
