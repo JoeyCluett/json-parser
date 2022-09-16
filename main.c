@@ -110,42 +110,36 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    printf("for every entry in top-level array, print payload/commits[0]/message if it exists\n\n");
-
     JsonNode_t* entry = JsonArrIter_current(&arr);
     for(; entry != NULL; JsonArrIter_next(&arr), entry = JsonArrIter_current(&arr)) {
 
-        // print every payload/commits[0]/message
+        // print every [*]/created_at   DateTime
+        // also perform the conversion to JsonTime_t structure
 
-        JsonNode_t* p = JsonObj_field_by_name(json, entry, "payload");
+        JsonNode_t* p = JsonObj_field_by_name(json, entry, "created_at");
         if(p == NULL) {
             continue;
         }
 
-        JsonNode_t* c = JsonObj_field_by_name(json, JsonPair_field(p), "commits");
-        if(c == NULL) {
-            continue;
-        }
-
-        JsonNode_t* c0 = JsonArr_index(JsonPair_field(c), 0);
-        if(c0 == NULL) {
-            continue;
-        }
-
-        JsonNode_t* m = JsonObj_field_by_name(json, c0, "message");
-        if(m == NULL) {
-            continue;
-        }
-
         JsonString_t str;
-        JsonString_init(&str, json, JsonPair_field(m));
-
+        JsonString_init(&str, json, JsonPair_field(p));
         size_t strsz = JsonString_size(&str);
         char buf[strsz + 1];
         strsz = JsonString_copy(&str, buf);
         buf[strsz] = '\0';
 
-        printf("message : %s\n", buf);
+        JsonDateTime_t dt;
+
+        if(JsonDateTime_from_json_string(&dt, &str)) {
+
+            char tbuf[JSONDATETIME_LEN + 0] = {0};
+            JsonDateTime_to_string(&dt, tbuf, JSONDATETIME_LEN);
+
+            printf("original  : %s\n", buf);
+            printf("generated : %s\n\n", tbuf);
+        } else {
+            printf("invalid time\n");
+        }
     }
 
     JsonParser_delete_document(&doc);

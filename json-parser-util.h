@@ -110,3 +110,42 @@ unsigned long JsonString_size(JsonString_t* str);
 // returns the actual (byte) size of the copied out string
 //
 size_t JsonString_copy(const JsonString_t* str, char* restrict dest);
+
+//
+// structure holding a date/time as per ISO-8601
+//
+typedef struct JsonDateTime {
+    int year;
+    int month;
+    int day;
+    int hours;
+    int minutes;
+    int seconds;
+    int milliseconds;
+} JsonDateTime_t;
+
+//
+// default initialize given JsonDateTime_t structure
+//
+void JsonDateTime_init_default(JsonDateTime_t* dt);
+
+#define JSONDATETIME_LEN    24 // full ISO-8601
+#define JSONDATETIME_LEN_TR 20 // truncated ISO-8601
+
+//
+// put the contents of the given JsonDateTime_t into the destination string
+// returns 1 on success, else 0.
+// will output truncated ISO-8601 (no milliseconds field) if dlen==20 and full time string if dlen==24
+// other dlen's return 0 right away
+//
+int JsonDateTime_to_string(JsonDateTime_t* dt, char* dest, int dlen);
+
+//
+// convert given JsonString_t in ISO-8601 to JsonDateTime_t structure
+//
+int JsonDateTime_from_json_string(JsonDateTime_t* dt, JsonString_t* str);
+
+//
+// convert given c-string in ISO-8601 to JsonDateTime_t structure
+//
+int JsonDateTime_from_cstring(JsonDateTime_t* dt, const char* str);

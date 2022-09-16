@@ -16,9 +16,10 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 #include "json-parser-config.h"
 #include "json-parser.h"
 
+#include <string.h>
 #include <stddef.h>
 
-static int JsonAPI_string_cmp(const char* start, const char* end, const char* nt_cstr);
+static int JsonAPI_string_eq(const char* start, const char* end, const char* nt_cstr);
 
 int JsonString_init(JsonString_t* str, const char* doc_source, JsonNode_t* str_node) {
 
@@ -164,9 +165,8 @@ size_t JsonString_copy(const JsonString_t* str, char* restrict dest) {
             start++;
         }
 #endif
-
-    }
 #endif
+    }
     return (size_t)(dest - dest_start);
 }
 
@@ -203,7 +203,7 @@ int JsonObjIter_field_name_matches(JsonObjIter_t* iter, const char* doc_source, 
     if(pair == NULL)
         return 0;
 
-    return JsonAPI_string_cmp(doc_source + pair->pair.key_start, doc_source + pair->pair.key_end, fieldname);
+    return JsonAPI_string_eq(doc_source + pair->pair.key_start, doc_source + pair->pair.key_end, fieldname);
 }
 
 JsonNode_t* JsonObj_field_by_name(const char* doc_source, JsonNode_t* obj, const char* fieldname) {
@@ -213,7 +213,7 @@ JsonNode_t* JsonObj_field_by_name(const char* doc_source, JsonNode_t* obj, const
 
     while(iter.current != NULL) {
         JsonNode_t* cur = iter.current;
-        if(JsonAPI_string_cmp(doc_source + cur->pair.key_start, doc_source + cur->pair.key_end, fieldname))
+        if(JsonAPI_string_eq(doc_source + cur->pair.key_start, doc_source + cur->pair.key_end, fieldname))
             return cur;
 
         // advance to next field
@@ -275,7 +275,7 @@ JsonNode_t* JsonObjIter_current(JsonObjIter_t* iter) {
     return iter->current;
 }
 
-static int JsonAPI_string_cmp(const char* start, const char* end, const char* nt_cstr) {
+static int JsonAPI_string_eq(const char* start, const char* end, const char* nt_cstr) {
 
     char c = *nt_cstr;
 
@@ -290,4 +290,118 @@ static int JsonAPI_string_cmp(const char* start, const char* end, const char* nt
     }
 
     return (start == end && c == '\0');
+}
+
+void JsonDateTime_init_default(JsonDateTime_t* dt) {
+    dt->year = 0;
+    dt->month = 0;
+    dt->day = 0;
+    dt->hours = 0;
+    dt->minutes = 0;
+    dt->seconds = 0;
+    dt->milliseconds = 0;
+}
+
+//
+// helper for converting datetime strings to 
+// returns new string location on success, else NULL
+//
+static inline const char* JsonAPI_dt_convert_integer(const char* src, const int len, int* dest, const char followup) {
+    char c = *src;
+    int t = 0;
+    int i;
+    for(i = 0; i < len; i++) {
+        if(c >= '0' && c <= '9') {
+            t *= 10;
+            t += (int)(c - '0');
+            c = *(++src);
+        } else {
+            return NULL;
+        }
+    }
+
+    if(c == followup) {
+        *dest = t;
+        return src + 1;
+    }
+    return NULL;
+}
+
+static char* JsonAPI_place_int(int val, char* d, int dlen) {
+    char* tmp = d + dlen;
+    d += (dlen - 1);
+    while(dlen > 0) {
+        int p = val % 10;
+        val /= 10;
+        *d-- = (char)(p + '0');
+        dlen--;
+    }
+    return tmp;
+}
+
+int JsonDateTime_to_string(JsonDateTime_t* dt, char* dest, int dlen) {
+    if(dlen != JSONDATETIME_LEN && dlen != JSONDATETIME_LEN_TR)
+        return 0;
+
+    // YYYY-MM-DDThh:mm:ss.xxxZ
+    // - or -
+    // YYYY-MM-DDThh:mm:ssZ
+
+    dest = JsonAPI_place_int(dt->year, dest, 4);
+    *dest++ = '-';
+    dest = JsonAPI_place_int(dt->month, dest, 2);
+    *dest++ = '-';
+    dest = JsonAPI_place_int(dt->day, dest, 2);
+    *dest++ = 'T';
+    dest = JsonAPI_place_int(dt->hours, dest, 2);
+    *dest++ = ':';
+    dest = JsonAPI_place_int(dt->minutes, dest, 2);
+    *dest++ = ':';
+    dest = JsonAPI_place_int(dt->seconds, dest, 2);
+
+    if(dlen == JSONDATETIME_LEN_TR) {
+        *dest = 'Z';
+        return 1;
+    }
+
+    *dest++ = '.';
+    dest = JsonAPI_place_int(dt->milliseconds, dest, 3);
+    *dest = 'Z';
+    return 1;
+}
+
+static int JsonAPI_date_time_from_string(JsonDateTime_t* dt, const char* start, const char* end) {
+    JsonDateTime_t t;
+    t.milliseconds = 0; // all other fields are overwritten
+
+    // YYYY-MM-DDThh:mm:ss.xxxZ
+    // - or -
+    // YYYY-MM-DDThh:mm:ssZ
+
+    if((start = JsonAPI_dt_convert_integer(start, 4, &t.year,    '-')) == NULL) return 0;
+    if((start = JsonAPI_dt_convert_integer(start, 2, &t.month,   '-')) == NULL) return 0;
+    if((start = JsonAPI_dt_convert_integer(start, 2, &t.day,     'T')) == NULL) return 0;
+    if((start = JsonAPI_dt_convert_integer(start, 2, &t.hours,   ':')) == NULL) return 0;
+    if((start = JsonAPI_dt_convert_integer(start, 2, &t.minutes, ':')) == NULL) return 0;
+
+    if(start[2] == '.') {
+        if((start = JsonAPI_dt_convert_integer(start, 2, &t.seconds,      '.')) == NULL) return 0;
+        if((start = JsonAPI_dt_convert_integer(start, 3, &t.milliseconds, 'Z')) == NULL) return 0;
+    } else {
+        if((start = JsonAPI_dt_convert_integer(start, 2, &t.seconds, 'Z')) == NULL) return 0;
+    }
+
+    if(start == end) {
+        memcpy(dt, &t, sizeof(JsonDateTime_t));
+        return 1;
+    }
+    return 0;
+}
+
+int JsonDateTime_from_json_string(JsonDateTime_t* dt, JsonString_t* str) {
+    return JsonAPI_date_time_from_string(dt, str->doc_source + str->start, str->doc_source + str->end);
+}
+
+int JsonDateTime_from_cstring(JsonDateTime_t* dt, const char* str) {
+    return JsonAPI_date_time_from_string(dt, str, str + strlen(str));
 }
