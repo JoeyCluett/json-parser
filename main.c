@@ -99,6 +99,11 @@ int main(int argc, char** argv) {
         json
     );
 
+    if(code != JsonParseCode_success) {
+        printf("failed to parse document : %s\n", JsonParseCode_as_string(code));
+        exit(1);
+    }
+
     if(doc.first->type != JsonNodeType_array) {
         printf("top-level entry is not an array type\n");
         exit(1);
@@ -113,32 +118,24 @@ int main(int argc, char** argv) {
     JsonNode_t* entry = JsonArrIter_current(&arr);
     for(; entry != NULL; JsonArrIter_next(&arr), entry = JsonArrIter_current(&arr)) {
 
-        // print every [*]/created_at   DateTime
-        // also perform the conversion to JsonTime_t structure
+        if(entry->type == JsonNodeType_number) {
+            JsonNumber_t n;
+            int r = JsonNumber_convert_from_json_string(json, entry, &n);
+            if(r == 0) {
+                printf("number could not be converted\n");
+            } else {
+                double f;
 
-        JsonNode_t* p = JsonObj_field_by_name(json, entry, "created_at");
-        if(p == NULL) {
-            continue;
-        }
+                switch(n.type) {
+                case JsonNumberType_unsigned: f = (double)n.u;
+                case JsonNumberType_signed:   f = (double)n.s;
+                case JsonNumberType_real:     f = (double)n.r;
+                }
 
-        JsonString_t str;
-        JsonString_init(&str, json, JsonPair_field(p));
-        size_t strsz = JsonString_size(&str);
-        char buf[strsz + 1];
-        strsz = JsonString_copy(&str, buf);
-        buf[strsz] = '\0';
-
-        JsonDateTime_t dt;
-
-        if(JsonDateTime_from_json_string(&dt, &str)) {
-
-            char tbuf[JSONDATETIME_LEN + 0] = {0};
-            JsonDateTime_to_string(&dt, tbuf, JSONDATETIME_LEN);
-
-            printf("original  : %s\n", buf);
-            printf("generated : %s\n\n", tbuf);
+                printf("number : %f\n", f);
+            }
         } else {
-            printf("invalid time\n");
+            printf("node type : %s\n", JsonNodeType_as_string(entry->type));
         }
     }
 

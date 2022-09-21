@@ -18,6 +18,7 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 
 #include <string.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 static int JsonAPI_string_eq(const char* start, const char* end, const char* nt_cstr);
 
@@ -276,11 +277,9 @@ JsonNode_t* JsonObjIter_current(JsonObjIter_t* iter) {
 }
 
 static int JsonAPI_string_eq(const char* start, const char* end, const char* nt_cstr) {
-
     char c = *nt_cstr;
 
     while(start != end && c) {
-
         if(*start != c)
             return 0;
 
@@ -290,6 +289,64 @@ static int JsonAPI_string_eq(const char* start, const char* end, const char* nt_
     }
 
     return (start == end && c == '\0');
+}
+
+int JsonNumber_convert_from_json_string(const char* doc_source, JsonNode_t* num_node, JsonNumber_t* num) {
+    if(doc_source == NULL || num_node == NULL || num_node->type != JsonNodeType_number || num_node == NULL)
+        return 0;
+
+    unsigned int numlen = num_node->num.end - num_node->num.start;
+    if(numlen >= (JSONPARSER_MAX_NUM_LEN - 1))
+        return 0;
+
+    const char*       iter     = doc_source + num_node->num.start;
+    const char* const end_iter = doc_source + num_node->num.end;
+
+    if(iter >= end_iter)
+        return 0;
+
+    char tmpbuf[JSONPARSER_MAX_NUM_LEN] = {0};
+    char* dest = tmpbuf;
+
+    int real_type   = 0;
+    int signed_type = 0;
+
+    if(*iter == '-') {
+        signed_type = 1;
+    }
+
+    while(iter != end_iter) {
+        const char c = *(iter++);
+        *(dest++) = c;
+        if(c == '.' || c == 'e' || c == 'E') {
+            real_type = 1;
+            break; // dont need to test anything more, just copy the rest
+        }
+    }
+
+    while(iter != end_iter)
+        *(dest++) = *(iter++);
+
+    if(real_type) {
+        num->type = JsonNumberType_real;
+        num->r = atof(tmpbuf);
+    } else if(signed_type) {
+        num->type = JsonNumberType_signed;
+        num->s = atol(tmpbuf);
+    } else {
+        // default must be an unsigned type
+        num->type = JsonNumberType_unsigned;
+        num->u = 0ul;
+
+        dest = tmpbuf;
+        while(*dest) {
+            num->u *= 10ul;
+            num->u += (unsigned long int)(*dest - '0');
+            dest++;
+        }
+    }
+
+    return 1;
 }
 
 void JsonDateTime_init_default(JsonDateTime_t* dt) {
@@ -303,7 +360,7 @@ void JsonDateTime_init_default(JsonDateTime_t* dt) {
 }
 
 //
-// helper for converting datetime strings to 
+// helper for converting datetime strings to integers.
 // returns new string location on success, else NULL
 //
 static inline const char* JsonAPI_dt_convert_integer(const char* src, const int len, int* dest, const char followup) {
@@ -327,7 +384,7 @@ static inline const char* JsonAPI_dt_convert_integer(const char* src, const int 
     return NULL;
 }
 
-static char* JsonAPI_place_int(int val, char* d, int dlen) {
+static inline char* JsonAPI_place_int(int val, char* d, int dlen) {
     char* tmp = d + dlen;
     d += (dlen - 1);
     while(dlen > 0) {

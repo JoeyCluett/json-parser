@@ -34,6 +34,11 @@ void JsonParser_default_delete_node(void* const alloc_data, JsonNode_t* node) {
     if(node == NULL) return;
     free(node);
 }
+#else
+
+#ifndef NULL
+#define NULL ((void*)0)
+#endif // NULL
 
 #endif // JSONPARSER_HAS_MALLOC
 
@@ -243,100 +248,81 @@ static inline const int JsonParser_valid_end_of_number(const char c) {
             c == ',' || c == '}' || c == ']';
 }
 
-static const char* JsonParser_consume_number(const char* str, JsonParseCode_t* code) {
-
-#define state_number_whole        0
-#define state_number_fraction     1
-#define state_number_exp_sign     2
-#define state_number_exp_num      3
-
-    int state_current;
-
-    if(str[0] == '-' || JsonParser_is_numeric(str[0])) {
-        str = (str[0] == '-') ? str + 1 : str;
-        const char c = str[0];
-        if(c == '0') {
-            const char sec = str[1];
-            if(sec == 'e' || sec == 'E') { // exponent sign part
-                state_current = state_number_exp_sign;
-                str += 2;
-            } else if(sec == '.') { // fractional part
-                state_current = state_number_fraction;
-                str += 2;
-            } else if(JsonParser_valid_end_of_number(sec)) {
-                return str + 1;
-            } else {
-                *code = JsonParseCode_number_invalid_char;
-                return NULL;
-            }
-        } else if(JsonParser_is_numeric(c)) {
-            state_current = state_number_whole;
-            str++;
-        } else {
-            *code = JsonParseCode_number_invalid_char;
-            return NULL;
-        }
-    } else {
+static inline const char* JsonParser_consume_number_exp(const char* str, JsonParseCode_t* code) {
+    char c = *str;
+    if(c == '-' || c == '+') {
+        c = *(++str);
+    } else if(!JsonParser_is_numeric(c)) {
         *code = JsonParseCode_number_invalid_char;
         return NULL;
     }
 
-    while(*str) {
-        const char c = *str;
+    while(JsonParser_is_numeric(c))
+        c = *(++str);
 
-        if(
-                state_current != state_number_exp_sign &&
-                JsonParser_valid_end_of_number(c)) {
-            return str;
-        }
+    if(JsonParser_valid_end_of_number(c)) {
+        return str;
+    } else {
+        *code = JsonParseCode_number_invalid_char;
+        return NULL;
+    }
+}
 
-        switch(state_current) {
-        case state_number_whole:
-            if(JsonParser_is_numeric(c)) { ;
-            } else if(c == '.') { // fractional part
-                state_current = state_number_fraction;
-            } else if(c == 'e' || c == 'E') { // exponent sign part
-                state_current = state_number_exp_sign;
-            } else {
-                *code = JsonParseCode_number_invalid_char;
-                return NULL;
-            }
-            str++;
-            break;
+static inline const char* JsonParser_consume_number_fraction(const char* str, JsonParseCode_t* code) {
+    char c = *str;
+    while(JsonParser_is_numeric(c))
+        c = *(++str);
 
-        case state_number_fraction:
-            if(JsonParser_is_numeric(c)) { ;
-            } else if(c == 'e' || c == 'E') { // exponent sign part
-                state_current = state_number_exp_sign;
-            } else {
-                *code = JsonParseCode_number_invalid_char;
-                return NULL;
-            }
-            str++;
-            break;
+    if(c == 'e' || c == 'E') {
+        return JsonParser_consume_number_exp(str, code);
+    } else if(JsonParser_valid_end_of_number(c)) {
+        return str;
+    } else {
+        *code = JsonParseCode_number_invalid_char;
+        return NULL;
+    }
+}
 
-        case state_number_exp_sign:
-            if(c == '-' || c == '+' || JsonParser_is_numeric(c)) {
-                state_current = state_number_exp_num;
-                str = (c == '-' || c == '+') ? str + 1 : str;
-                break;
-            } else {
-                *code = JsonParseCode_number_invalid_char;
-                return NULL;
-            }
+static inline const char* JsonParser_consume_number_whole(const char* str, JsonParseCode_t* code) {
+    char c = *str;
+    while(JsonParser_is_numeric(c))
+        c = *(++str);
 
-        case state_number_exp_num:
-            if(JsonParser_is_numeric(c)) {
-                str++;
-                break;
-            } else {
-                *code = JsonParseCode_number_invalid_char;
-                return NULL;
-            }
-        }
+    if(c == '.') {
+        return JsonParser_consume_number_fraction(str + 1, code);
+    } else if(c == 'e' || c == 'E') {
+        return JsonParser_consume_number_exp(str + 1, code);            
+    } else if(JsonParser_valid_end_of_number(c)) {
+        return str;
+    } else {
+        *code = JsonParseCode_number_invalid_char;
+        return NULL;
+    }
+}
+
+static inline const char* JsonParser_consume_number(const char* str, JsonParseCode_t* code) {
+    char c = *str;
+    if(c == '-') {
+        c = *(++str);
+    } else if(!JsonParser_is_numeric(c)) {
+        *code = JsonParseCode_number_invalid_char;
+        return NULL;
     }
 
-    return NULL;
+    if(c != '0')
+        return JsonParser_consume_number_whole(str, code);
+
+    c = *(++str);
+    if(c == 'e' || c == 'E') {
+        return JsonParser_consume_number_exp(str + 1, code);
+    } else if(c == '.') {
+        return JsonParser_consume_number_fraction(str + 1, code);
+    } else if(JsonParser_valid_end_of_number(c)) {
+        return str;
+    } else {
+        *code = JsonParseCode_number_invalid_char;
+        return NULL;
+    }
 }
 
 static inline const char* JsonParser_is_tfn(const char* str, JsonNodeType_t* nodetype) {

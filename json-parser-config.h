@@ -18,7 +18,7 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 // makes JsonParser default allocate/deallocate functions available.
 // these functions internally use malloc/free
 //
-#define JSONPARSER_HAS_MALLOC
+///#define JSONPARSER_HAS_MALLOC
 
 //
 // allows arrays to end with ,] and objects with ,}
@@ -32,6 +32,12 @@ with json-parser. If not, see <https://www.gnu.org/licenses/>.
 // nested behaviors as well
 //
 #define JSONPARSER_MAX_DEPTH 64
+
+//
+// defines the size of the char buffer used internally to convert 
+// JSON numbers to an internal primitive type
+//
+#define JSONPARSER_MAX_NUM_LEN 128
 
 //
 // support utf-8 encoding

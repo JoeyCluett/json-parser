@@ -112,6 +112,31 @@ unsigned long JsonString_size(JsonString_t* str);
 size_t JsonString_copy(const JsonString_t* str, char* restrict dest);
 
 //
+// structure for holding one of the primitive types that 
+// the number conversion routines recognize
+//
+typedef enum {
+    JsonNumberType_unsigned = 0,
+    JsonNumberType_signed   = 1,
+    JsonNumberType_real     = 2,
+} JsonNumberType_t;
+
+typedef struct JsonNumber {
+    JsonNumberType_t type;
+    union {
+        unsigned long int u;
+        long int          s;
+        double            r;
+    };
+} JsonNumber_t;
+
+//
+// converts contents of given JsonNodeType_number node to actual primitive number type
+// returns 1 on success, else 0
+//
+int JsonNumber_convert_from_json_string(const char* doc_source, JsonNode_t* num_node, JsonNumber_t* num);
+
+//
 // structure holding a date/time as per ISO-8601
 //
 typedef struct JsonDateTime {
